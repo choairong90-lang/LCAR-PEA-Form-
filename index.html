@@ -1,0 +1,559 @@
+
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ระบบสร้างอาร์ตเวิร์กแผ่นพับ/ใบปลิวประชาสัมพันธ์ PEA A4</title>
+  
+  <!-- Tailwind CSS & Google Fonts (Sarabun & Kanit) -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Sarabun:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,300;1,400;1,500;1,600;1,700;1,800&family=Kanit:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,300;1,400;1,500;1,600&display=swap" rel="stylesheet">
+  
+  <!-- Alpine.js for smooth reactivity and state management -->
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sarabun: ['Sarabun', 'sans-serif'],
+            kanit: ['Kanit', 'sans-serif'],
+          },
+          colors: {
+            pea: {
+              light: '#F3E5F5',
+              medium: '#9C27B0',
+              purple: '#7B1FA2', // PEA Purple Code
+              dark: '#4A148C',
+              accent: '#FFD54F',
+            }
+          }
+        }
+      }
+    }
+  </script>
+
+  <style>
+    body {
+      background-color: #121216;
+      font-family: 'Sarabun', sans-serif;
+    }
+
+    /* Fixed A4 Page bounding-box inside editor workspace */
+    .a4-page {
+      width: 210mm;
+      height: 297mm;
+      background: white;
+      position: relative;
+      margin: 0 auto;
+      box-shadow: 0 12px 30px rgba(0,0,0,0.6);
+      box-sizing: border-box;
+      overflow: hidden;
+    }
+
+    /* Print-specific configurations - strictly enforces 100% exact page-break */
+    @media print {
+      html, body {
+        background: none !important;
+        background-color: #ffffff !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        width: 210mm !important;
+        height: 297mm !important;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+      }
+      @page {
+        size: A4 portrait;
+        margin: 0 !important;
+      }
+      .no-print {
+        display: none !important;
+      }
+      .a4-page {
+        position: absolute !important;
+        left: 0 !important;
+        top: 0 !important;
+        width: 210mm !important;
+        height: 297mm !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        box-shadow: none !important;
+        border: none !important;
+        page-break-after: always;
+        page-break-inside: avoid;
+        overflow: hidden;
+      }
+    }
+
+    .custom-scrollbar::-webkit-scrollbar {
+      width: 6px;
+    }
+    .custom-scrollbar::-webkit-scrollbar-track {
+      background: #191921;
+    }
+    .custom-scrollbar::-webkit-scrollbar-thumb {
+      background: #7b1fa2;
+      border-radius: 3px;
+    }
+  </style>
+</head>
+<body class="text-gray-200 min-h-screen font-sarabun antialiased flex flex-col lg:flex-row" x-data="artWorkController()">
+
+  <!-- Control Sidebar (Left Panel) -->
+  <div class="no-print w-full lg:w-[420px] bg-[#15151b] border-b lg:border-b-0 lg:border-r border-gray-800 p-6 flex flex-col shrink-0 justify-between h-auto lg:h-screen lg:overflow-y-auto custom-scrollbar">
+    <div>
+      <!-- Header Brand -->
+      <div class="flex items-center space-x-3 mb-5 pb-5 border-b border-gray-800">
+        <div class="bg-gradient-to-tr from-[#7B1FA2] to-indigo-600 p-2.5 rounded-xl text-white shadow-md">
+          <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10a2 2 0 012 2v1m2 13a2 2 0 01-2-2V7m2 13a2 2 0 002-2V9a2 2 0 00-2-2h-2m-4-3H9M7 16h6M7 8h6v4H7V8z"></path>
+          </svg>
+        </div>
+        <div>
+          <h1 class="font-kanit font-extrabold text-base leading-tight text-white">PEA Form Generator</h1>
+          <p class="text-xs text-purple-300">สร้างเอกสารประชาสัมพันธ์ A4 (8 ช่อง/หน้า)</p>
+        </div>
+      </div>
+
+      <!-- Quick Preset Selection Tabs -->
+      <div class="mb-6">
+        <label class="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2 font-kanit">เลือกรูปแบบข้อมูลด่วน (Presets)</label>
+        <div class="grid grid-cols-1 gap-2">
+          <button @click="applyPreset('transfer')" :class="activePreset === 'transfer' ? 'bg-purple-900/50 border-purple-500 text-white font-bold' : 'bg-[#1f1f2a] border-gray-800 text-gray-400 hover:text-white'" class="border text-left py-2 px-3 rounded-lg text-xs transition duration-200 flex items-center justify-between">
+            <span>🔄 การโอนเปลี่ยนชื่อมิเตอร์ไฟฟ้า</span>
+            <span class="text-[10px] bg-purple-950 text-purple-300 px-1.5 py-0.5 rounded">ใช้งานอยู่</span>
+          </button>
+          <button @click="applyPreset('apply')" :class="activePreset === 'apply' ? 'bg-purple-900/50 border-purple-500 text-white font-bold' : 'bg-[#1f1f2a] border-gray-800 text-gray-400 hover:text-white'" class="border text-left py-2 px-3 rounded-lg text-xs transition duration-200 flex items-center justify-between">
+            <span>💡 การขอใช้ไฟฟ้าใหม่</span>
+            <span class="text-[10px] bg-purple-950 text-purple-300 px-1.5 py-0.5 rounded">ใช้งานอยู่</span>
+          </button>
+          <button @click="applyPreset('extend')" :class="activePreset === 'extend' ? 'bg-purple-900/50 border-purple-500 text-white font-bold' : 'bg-[#1f1f2a] border-gray-800 text-gray-400 hover:text-white'" class="border text-left py-2 px-3 rounded-lg text-xs transition duration-200 flex items-center justify-between">
+            <span>🏗️ การขยายเขตระบบจำหน่าย</span>
+            <span class="text-[10px] bg-purple-950 text-purple-300 px-1.5 py-0.5 rounded">ใช้งานอยู่</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Editable Content Settings -->
+      <div class="space-y-4 pt-4 border-t border-gray-800">
+        <h3 class="text-xs font-bold uppercase tracking-wider text-purple-400 font-kanit">แก้ไขข้อมูลหัวเรื่องและการ์ดประชาสัมพันธ์</h3>
+        
+        <!-- Header Text -->
+        <div>
+          <label class="block text-xs text-gray-400 mb-1">หัวข้อประกาศหลัก (ทุกช่องจะเปลี่ยนตามทันที)</label>
+          <textarea x-model="mainTitle" rows="2" class="w-full bg-[#1e1e26] border border-gray-700 rounded-lg py-2 px-3 text-sm text-white focus:outline-none focus:border-purple-500 font-sarabun"></textarea>
+<div class="mt-3">
+<label class="block text-xs text-gray-400 mb-1">เลือกการไฟฟ้าส่วนภูมิภาคสาขา</label>
+<select x-model="officeName" class="w-full bg-[#1e1e26] border border-gray-700 rounded-lg py-2 px-3 text-sm text-white">
+<template x-for="office in officeOptions"><option :value="office" x-text="office"></option></template>
+</select>
+<div x-show="officeName === 'อื่นๆ'" class="mt-2">
+<input type="text" x-model="customOfficeName" placeholder="โปรดระบุชื่อสาขา" class="w-full bg-[#1e1e26] border border-gray-700 rounded-lg py-2 px-3 text-sm text-white">
+</div></div>
+        </div>
+
+        <!-- Checklist Customization with Subtext -->
+        <div class="space-y-3 bg-[#1c1c24] p-3 rounded-lg border border-gray-800">
+          <span class="text-[11px] font-bold text-gray-400 uppercase tracking-wide block">แก้ไขรายการเอกสารที่ต้องใช้ (5 ข้อ)</span>
+          
+          <div>
+            <label class="block text-[10px] text-gray-500 mb-0.5">ข้อที่ 1</label>
+            <input type="text" x-model="item1" class="w-full bg-[#131318] border border-gray-700 rounded py-1 px-2 text-xs text-white">
+            <input type="text" x-model="item1Sub" class="w-full bg-[#131318] border border-gray-800 rounded py-0.5 px-2 text-[10px] text-gray-400 mt-1">
+          </div>
+
+          <div>
+            <label class="block text-[10px] text-gray-500 mb-0.5">ข้อที่ 2</label>
+            <input type="text" x-model="item2" class="w-full bg-[#131318] border border-gray-700 rounded py-1 px-2 text-xs text-white">
+            <input type="text" x-model="item2Sub" class="w-full bg-[#131318] border border-gray-800 rounded py-0.5 px-2 text-[10px] text-gray-400 mt-1">
+          </div>
+
+          <div>
+            <label class="block text-[10px] text-gray-500 mb-0.5">ข้อที่ 3</label>
+            <input type="text" x-model="item3" class="w-full bg-[#131318] border border-gray-700 rounded py-1 px-2 text-xs text-white">
+            <input type="text" x-model="item3Sub" class="w-full bg-[#131318] border border-gray-800 rounded py-0.5 px-2 text-[10px] text-gray-400 mt-1">
+          </div>
+
+          <div>
+            <label class="block text-[10px] text-gray-500 mb-0.5">ข้อที่ 4</label>
+            <input type="text" x-model="item4" class="w-full bg-[#131318] border border-gray-700 rounded py-1 px-2 text-xs text-white">
+            <input type="text" x-model="item4Sub" class="w-full bg-[#131318] border border-gray-800 rounded py-0.5 px-2 text-[10px] text-gray-400 mt-1">
+          </div>
+
+          <div>
+            <label class="block text-[10px] text-gray-500 mb-0.5">ข้อที่ 5</label>
+            <input type="text" x-model="item5" class="w-full bg-[#131318] border border-gray-700 rounded py-1 px-2 text-xs text-white">
+            <input type="text" x-model="item5Sub" class="w-full bg-[#131318] border border-gray-800 rounded py-0.5 px-2 text-[10px] text-gray-400 mt-1">
+          </div>
+        </div>
+
+        <!-- Contact Box Info -->
+        <div class="space-y-2 pt-2">
+          <label class="block text-[11px] font-bold text-gray-400 uppercase tracking-wide">ข้อมูลการติดต่อด้านล่าง</label>
+          <input type="text" x-model="contactLocation" placeholder="หน่วยงานที่ติดต่อ" class="w-full bg-[#1e1e26] border border-gray-700 rounded-lg py-1.5 px-3 text-xs text-white">
+          <input type="text" x-model="contactPhone" placeholder="เบอร์โทรศัพท์" class="w-full bg-[#1e1e26] border border-gray-700 rounded-lg py-1.5 px-3 text-xs text-white">
+          <input type="text" x-model="contactNote" placeholder="หมายเหตุวันทำการ" class="w-full bg-[#1e1e26] border border-gray-700 rounded-lg py-1.5 px-3 text-xs text-white">
+        </div>
+
+        <!-- Visual Style Settings -->
+        <div class="pt-4 border-t border-gray-800 space-y-4">
+          <h3 class="text-xs font-bold uppercase tracking-wider text-gray-500">การปรับตั้งค่าลายน้ำ & เส้นขอบ</h3>
+          
+          <!-- Watermark Opacity Slider -->
+          <div>
+            <div class="flex justify-between items-center mb-1">
+              <label class="text-xs text-gray-400">ความโปร่งใปลายน้ำเสาไฟสายส่ง</label>
+              <span class="text-xs text-purple-400 font-mono" x-text="(watermarkOpacity * 100).toFixed(0) + '%'"></span>
+            </div>
+            <input type="range" min="0.01" max="0.25" step="0.01" x-model="watermarkOpacity" class="w-full accent-purple-600">
+          </div>
+
+          <!-- Cutting Guide Selection -->
+          <div>
+            <label class="block text-xs text-gray-400 mb-2">ลักษณะเส้นนำสายตาการตัดขอบ (Cut Guides)</label>
+            <div class="grid grid-cols-2 gap-2">
+              <button @click="borderStyle = 'dashed'" :class="borderStyle === 'dashed' ? 'bg-purple-900 border-purple-500 text-white' : 'bg-[#1f1f2a] border-gray-800 text-gray-400'" class="border py-2 px-3 rounded-md text-xs transition">
+                เส้นประ (Dashed)
+              </button>
+              <button @click="borderStyle = 'solid'" :class="borderStyle === 'solid' ? 'bg-purple-900 border-purple-500 text-white' : 'bg-[#1f1f2a] border-gray-800 text-gray-400'" class="border py-2 px-3 rounded-md text-xs transition">
+                เส้นทึบบาง (Solid)
+              </button>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- Print Action Area -->
+    <div class="mt-8 pt-6 border-t border-gray-800 space-y-3">
+      <button @click="window.print()" class="w-full bg-gradient-to-r from-[#7B1FA2] to-[#4A148C] hover:from-[#5E197A] hover:to-[#3C0E4E] text-white font-kanit font-semibold py-3 px-4 rounded-xl shadow-lg transition-all duration-300 transform hover:-translate-y-0.5 flex items-center justify-center space-x-2">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"></path>
+        </svg>
+        <span>พิมพ์อาร์ตเวิร์ก (Print / PDF)</span>
+      </button>
+      <div class="text-center text-[10px] text-gray-500">
+        เพื่อความคมชัดสูงสุด แนะนำตั้งค่าพิมพ์แบบไร้ขอบ (Margins: None)
+      </div>
+    </div>
+  </div>
+
+  <!-- Main Preview Canvas Area (Right Panel) -->
+  <div class="flex-1 flex flex-col items-center justify-center p-4 lg:p-8 overflow-auto min-h-screen">
+    
+    <!-- Workspace top metadata (Web-only) -->
+    <div class="no-print w-full max-w-[210mm] flex flex-col sm:flex-row justify-between items-center mb-4 text-xs text-gray-400 gap-3">
+      <div class="flex items-center space-x-2">
+        <span class="inline-block w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
+        <span>แม่แบบพิมพ์ 100% (A4 Portrait - 8 Cards)</span>
+      </div>
+      <div class="flex items-center space-x-4 font-mono">
+        <div>ขนาด: <strong>210 × 297 มิลลิเมตร</strong></div>
+        <div class="bg-purple-950/40 text-purple-300 px-2 py-0.5 rounded border border-purple-900/50"><strong>300 DPI High-Res</strong></div>
+      </div>
+    </div>
+
+    <!-- The physical A4 Container -->
+    <div class="a4-page shadow-2xl relative bg-white" id="print-canvas">
+      
+      <!-- Grid layout: 2 Columns x 4 Rows = 8 cards strictly fitting inside the A4 dimensions -->
+      <div class="grid grid-cols-2 grid-rows-4 h-full w-full">
+        
+        <!-- Loop for rendering 8 identical cards dynamically linked to state -->
+        <template x-for="i in 8" :key="i">
+          
+          <!-- Single Card Structure -->
+          <div class="relative bg-white flex flex-col justify-between p-3.5 overflow-hidden select-none"
+               :class="{
+                 'border-r': i % 2 !== 0,
+                 'border-b': i <= 6,
+                 'border-dashed': borderStyle === 'dashed',
+                 'border-solid': borderStyle === 'solid'
+               }"
+               style="border-color: rgba(123, 31, 162, 0.35); box-sizing: border-box; height: 74.25mm; width: 105mm;">
+
+            <!-- Background Watermark: High Voltage Transmission Tower (Semi-transparent vector) -->
+            <div class="absolute inset-0 flex items-center justify-center pointer-events-none z-0" :style="{ opacity: watermarkOpacity }">
+              <svg class="w-5/6 h-5/6 text-[#7B1FA2]" viewBox="0 0 200 200" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <!-- Main Grid Tower Framework -->
+                <path d="M70 180 L90 20 L110 20 L130 180 Z" />
+                <path d="M50 180 L150 180" />
+                <path d="M70 140 L130 140" />
+                <path d="M77 100 L123 100" />
+                <path d="M84 60 L116 60" />
+                
+                <!-- Cross-brace Diagonal lines -->
+                <path d="M70 180 L130 140" />
+                <path d="M130 180 L70 140" />
+                <path d="M70 140 L123 100" />
+                <path d="M130 140 L77 100" />
+                <path d="M77 100 L116 60" />
+                <path d="M123 100 L84 60" />
+                <path d="M84 60 L110 20" />
+                <path d="M116 60 L90 20" />
+                
+                <!-- Horizontal Transmission Wings / Arms -->
+                <!-- Level 1 Arm -->
+                <path d="M45 70 L155 70" />
+                <path d="M45 70 L45 82" />
+                <path d="M155 70 L155 82" />
+                
+                <!-- Level 2 Arm -->
+                <path d="M35 110 L165 110" />
+                <path d="M35 110 L35 122" />
+                <path d="M165 110 L165 122" />
+
+                <!-- Level 3 Arm -->
+                <path d="M25 150 L175 150" />
+                <path d="M25 150 L25 162" />
+                <path d="M175 150 L175 162" />
+                
+                <!-- Drooping high-voltage lines (background cables) -->
+                <path d="M10 82 Q 35 115, 45 82" stroke-dasharray="2,2" />
+                <path d="M45 82 Q 100 120, 155 82" stroke-dasharray="2,2" />
+                <path d="M155 82 Q 175 115, 190 82" stroke-dasharray="2,2" />
+
+                <path d="M10 122 Q 25 145, 35 122" stroke-dasharray="2,2" />
+                <path d="M35 122 Q 100 160, 165 122" stroke-dasharray="2,2" />
+                <path d="M165 122 Q 185 145, 190 122" stroke-dasharray="2,2" />
+              </svg>
+            </div>
+
+            <!-- Content Area (Relative to sit above watermark) -->
+            <div class="relative z-10 flex flex-col justify-between h-full space-y-1.5">
+
+              <!-- Header Bar: Refined Logo & Title (Clean PEA typography without graphic badge) -->
+              <div class="flex items-center justify-between pb-1 border-b border-gray-100/80">
+                <div class="flex items-center space-x-2">
+                  <div class="flex flex-col">
+                    <div class="flex flex-col items-center">
+                    <img src="pea-logo.png" class="h-6 w-auto object-contain" alt="PEA Logo">
+                    <span class="text-[7.5px] font-bold leading-none text-gray-500 tracking-tight mt-0.5">การไฟฟ้าส่วนภูมิภาค</span>
+                  </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Main Banner Label: Deep PEA Purple Banner with Crisp White Dynamic Text -->
+              <div class="rounded-lg py-1 px-2 text-center shadow-sm flex items-center justify-center min-h-[26px]" :style="{ backgroundColor: primaryColor }">
+                <h3 class="font-kanit font-semibold text-[9.5px] text-white tracking-wide leading-snug" x-text="mainTitle"></h3>
+              </div>
+
+              <!-- Checklist Items Grid Container (Strict spacing to avoid overlap) -->
+              <div class="space-y-1.5 px-0.5">
+                
+                <!-- Item 1: บัตรประชาชน -->
+                <div class="flex items-start space-x-2">
+                  <div class="p-0.5 rounded text-[#7B1FA2] shrink-0 mt-0.5" :style="{ color: primaryColor }">
+                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2.5">
+                      <!-- Custom ID Card Icon -->
+                      <rect x="3" y="4" width="18" height="16" rx="2"/>
+                      <circle cx="8" cy="11" r="2"/>
+                      <line x1="13" y1="9" x2="18" y2="9"/>
+                      <line x1="13" y1="13" x2="17" y2="13"/>
+                    </svg>
+                  </div>
+                  <div class="flex flex-col">
+                    <p class="text-[9px] font-bold text-gray-800 leading-tight" x-text="item1"></p>
+                    <p class="text-[7.2px] text-gray-500 leading-none mt-0.5" x-text="item1Sub"></p>
+                  </div>
+                </div>
+
+                <!-- Item 2: ทะเบียนบ้าน -->
+                <div class="flex items-start space-x-2">
+                  <div class="p-0.5 rounded text-[#7B1FA2] shrink-0 mt-0.5" :style="{ color: primaryColor }">
+                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2.5">
+                      <!-- Custom House Icon -->
+                      <path d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/>
+                    </svg>
+                  </div>
+                  <div class="flex flex-col">
+                    <p class="text-[9px] font-bold text-gray-800 leading-tight" x-text="item2"></p>
+                    <p class="text-[7.2px] text-gray-500 leading-none mt-0.5" x-text="item2Sub"></p>
+                  </div>
+                </div>
+
+                <!-- Item 3: ใบมรณบัตร / ใบอนุญาต / เอกสารทางวิศวกรรม -->
+                <div class="flex items-start space-x-2">
+                  <div class="p-0.5 rounded text-[#7B1FA2] shrink-0 mt-0.5" :style="{ color: primaryColor }">
+                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2.5">
+                      <!-- Document Certificate Icon -->
+                      <path d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                      <path d="M14 3v5h5"/>
+                    </svg>
+                  </div>
+                  <div class="flex flex-col">
+                    <p class="text-[9px] font-bold text-gray-800 leading-tight" x-text="item3"></p>
+                    <p class="text-[7.2px] text-gray-500 leading-none mt-0.5" x-text="item3Sub"></p>
+                  </div>
+                </div>
+
+                <!-- Item 4: ใบแจ้งหนี้ / แผนผังสายไฟ -->
+                <div class="flex items-start space-x-2">
+                  <div class="p-0.5 rounded text-[#7B1FA2] shrink-0 mt-0.5" :style="{ color: primaryColor }">
+                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2.5">
+                      <!-- Invoice with Thunder Icon -->
+                      <rect x="4" y="3" width="16" height="18" rx="2"/>
+                      <path d="M9 7h6M9 11h3"/>
+                      <path d="M14 14l-2 3h3l-2 3" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                  </div>
+                  <div class="flex flex-col">
+                    <p class="text-[9px] font-bold text-gray-800 leading-tight" x-text="item4"></p>
+                    <p class="text-[7.2px] text-gray-500 leading-none mt-0.5" x-text="item4Sub"></p>
+                  </div>
+                </div>
+
+                <!-- Item 5: โฉนดที่ดิน / สิทธิ์ครอบครอง -->
+                <div class="flex items-start space-x-2">
+                  <div class="p-0.5 rounded text-[#7B1FA2] shrink-0 mt-0.5" :style="{ color: primaryColor }">
+                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2.5">
+                      <!-- Map / Land Deed Icon -->
+                      <path d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"/>
+                    </svg>
+                  </div>
+                  <div class="flex flex-col">
+                    <p class="text-[9px] font-bold text-gray-800 leading-tight" x-text="item5"></p>
+                    <p class="text-[7.2px] text-gray-500 leading-none mt-0.5" x-text="item5Sub"></p>
+                  </div>
+                </div>
+
+              </div>
+
+              <!-- Footer Section: Contact Information Box -->
+              <div class="rounded-lg p-1 flex items-center justify-between border shadow-inner transition duration-300"
+                   :style="{ backgroundColor: primaryLightColor, borderColor: primaryColor + '20' }">
+                <div class="flex items-center space-x-1.5 pl-0.5">
+                  <!-- Phone Ring Icon in Solid Rounded Box -->
+                  <div class="p-1 rounded-md text-white shrink-0" :style="{ backgroundColor: primaryColor }">
+                    <svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="3" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" d="M2.25 6.75c0 8.284 6.716 15 15 15h2.25a2.25 2.25 0 002.25-2.25v-1.372c0-.516-.351-.966-.852-1.091l-4.423-1.106c-.44-.11-.902.055-1.173.417l-.97 1.293c-.282.376-.769.542-1.21.387a20.373 20.373 0 01-5.714-5.714c-.155-.44-.09-.928.297-1.21l1.293-.97c.363-.271.527-.734.417-1.173L6.963 3.102a1.125 1.125 0 00-1.091-.852H4.5A2.25 2.25 0 002.25 4.5v2.25z" />
+                    </svg>
+                  </div>
+                  <div class="flex flex-col">
+                    <span class="text-[8.5px] font-bold text-gray-800 leading-none" x-text="contactLocation"></span>
+                    <span class="text-[9.5px] font-extrabold font-mono leading-none tracking-wide mt-0.5" :style="{ color: primaryColor }">
+                      โทร. <span x-text="contactPhone"></span>
+                    </span>
+                  </div>
+                </div>
+                <div class="text-[7px] text-gray-500 font-semibold text-right leading-tight max-w-[70px] pr-1" x-text="contactNote"></div>
+              </div>
+
+            </div>
+
+          </div>
+        </template>
+
+      </div>
+      
+    </div>
+
+  </div>
+
+  <script>
+    function artWorkController() {
+      return {
+        // Aesthetic Configuration
+        primaryColor: '#5E197A',
+        primaryDarkColor: '#3C0E4E',
+        primaryLightColor: '#f0e3f2',
+        watermarkOpacity: 0.05,
+        borderStyle: 'dashed',
+        activePreset: 'transfer',
+        officeName: 'เจาะไอร้อง',
+        officeOptions: ['เจาะไอร้อง','จะแนะ','ระแงะ','นราธิวาส','ตากใบ','ยี่งอ','บาเจาะ','รือเสาะ','ศรีสาคร','อื่นๆ'],
+        customOfficeName: '',
+
+
+        // Dynamic State Fields linked to forms
+        mainTitle: 'เอกสารที่ต้องใช้ในการโอนเปลี่ยนชื่อมิเตอร์ไฟฟ้า',
+        
+        item1: 'บัตรประชาชนตัวจริง (ผู้โอน/ผู้รับโอน)',
+        item1Sub: 'ต้องไม่หมดอายุและมีลายเซ็นรับรองถูกต้อง',
+        
+        item2: 'ทะเบียนบ้านตัวจริง (ผู้โอน/ผู้รับโอน)',
+        item2Sub: 'แสดงความเกี่ยวข้องกับสถานที่ขอใช้ไฟฟ้า',
+        
+        item3: 'ใบมรณะบัตร (กรณีเจ้าของเดิมเสียชีวิต)',
+        item3Sub: 'กรณีทายาทเป็นผู้มาขอโอนกรรมสิทธิ์เครื่องวัด',
+        
+        item4: 'ใบแจ้งค่าไฟฟ้า',
+        item4Sub: 'หรือใบเสร็จรับเงินรอบบิลล่าสุดเพื่อระบุเลขผู้ใช้ไฟ',
+        
+        item5: 'อื่น ๆ (ถ้ามี เช่น โฉนดที่ดิน)',
+        item5Sub: 'เอกสารสิทธิ์แสดงความเป็นเจ้าของกรรมสิทธิ์บ้าน/ที่ดิน',
+
+        contactLocation: 'ติดต่อสอบถาม กฟส.เจาะไอร้อง',
+        contactPhone: '073-544128',
+        contactNote: '(ทุกวันในเวลาราชการ)',
+
+        // Comprehensive Data Presets supporting user request
+        presets: {
+          transfer: {
+            title: 'เอกสารที่ต้องใช้ในการโอนเปลี่ยนชื่อมิเตอร์ไฟฟ้า',
+            i1: 'บัตรประชาชนตัวจริง (ผู้โอน/ผู้รับโอน)',
+            i1Sub: 'ต้องไม่หมดอายุและมีลายเซ็นรับรองถูกต้อง',
+            i2: 'ทะเบียนบ้านตัวจริง (ผู้โอน/ผู้รับโอน)',
+            i2Sub: 'แสดงความเกี่ยวข้องกับสถานที่ขอใช้ไฟฟ้า',
+            i3: 'ใบมรณะบัตร (กรณีเจ้าของเดิมเสียชีวิต)',
+            i3Sub: 'กรณีทายาทเป็นผู้มาขอโอนกรรมสิทธิ์เครื่องวัด',
+            i4: 'ใบแจ้งค่าไฟฟ้า',
+            i4Sub: 'หรือใบเสร็จรับเงินรอบบิลล่าสุดเพื่อระบุเลขผู้ใช้ไฟ',
+            i5: 'อื่น ๆ (ถ้ามี เช่น โฉนดที่ดิน)',
+            i5Sub: 'เอกสารสิทธิ์แสดงความเป็นเจ้าของกรรมสิทธิ์บ้าน/ที่ดิน'
+          },
+          apply: {
+            title: 'เอกสารที่ต้องใช้ในการขอใช้ไฟฟ้าใหม่',
+            i1: 'บัตรประชาชนตัวจริง (ผู้ขอใช้ไฟฟ้า)',
+            i1Sub: 'ต้องไม่หมดอายุและข้อมูลชัดเจนคมชัดสะกดถูกต้อง',
+            i2: 'ทะเบียนบ้านตัวจริง (สถานที่ขอติดตั้ง)',
+            i2Sub: 'ต้องมีบ้านเลขที่เรียบร้อยและลงทะเบียนในระบบทะเบียนราษฎร์',
+            i3: 'เอกสารสิทธิ์ครอบครองอาคาร/สิ่งปลูกสร้าง',
+            i3Sub: 'เช่น โฉนดที่ดิน, สัญญาซื้อขาย หรือใบอนุญาตก่อสร้าง',
+            i4: 'หนังสือมอบอำนาจ (กรณีดำเนินการแทน)',
+            i4Sub: 'แนบสำเนาบัตรประชาชนผู้มอบอำนาจพร้อมติดอากรแสตมป์',
+            i5: 'แผนที่สังเขปสถานที่ติดตั้งเครื่องวัด',
+            i5Sub: 'แสดงจุดสังเกตสำคัญและเส้นทางเข้าถึงให้เข้าใจง่าย'
+          },
+          extend: {
+            title: 'เอกสารที่ต้องใช้ในการขยายเขตระบบจำหน่าย',
+            i1: 'บัตรประชาชนตัวจริง (ผู้ยื่นคำร้องขอขยายเขต)',
+            i1Sub: 'ข้อมูลตรงตามเอกสารสิทธิ์ในการครอบครองที่ดิน',
+            i2: 'ทะเบียนบ้านผู้ขอขยายเขตไฟฟ้า',
+            i2Sub: 'สำหรับใช้ระบุที่อยู่จัดส่งเอกสารแจ้งประเมินค่าใช้จ่าย',
+            i3: 'โฉนดที่ดิน / เอกสารสิทธิ์ครอบครองในพื้นที่',
+            i3Sub: 'แสดงขอบเขตแนวที่ดินที่เส้นทางของเสาไฟฟ้าพาดผ่าน',
+            i4: 'แผนที่แผ่นผังระยะทางแนวขยายเขตโดยสังเขป',
+            i4Sub: 'ระบุพิกัดที่ตั้งที่ต้องการพาดสายและปักเสาไฟฟ้า',
+            i5: 'หนังสือยินยอมให้ผ่านที่ดิน (กรณีผ่านที่ดินเอกชน)',
+            i5Sub: 'ต้องลงนามยินยอมพร้อมแนบสำเนาบัตรผู้มีกรรมสิทธิ์ร่วมด้วย'
+          }
+        },
+
+        applyPreset(presetKey) {
+          this.activePreset = presetKey;
+          const data = this.presets[presetKey];
+          this.mainTitle = data.title;
+          this.item1 = data.i1;
+          this.item1Sub = data.i1Sub;
+          this.item2 = data.i2;
+          this.item2Sub = data.i2Sub;
+          this.item3 = data.i3;
+          this.item3Sub = data.i3Sub;
+          this.item4 = data.i4;
+          this.item4Sub = data.i4Sub;
+          this.item5 = data.i5;
+          this.item5Sub = data.i5Sub;
+        }
+      }
+    }
+  </script>
+</body>
+</html>
